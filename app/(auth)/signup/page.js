@@ -32,11 +32,10 @@ import { supabase } from "@/lib/supabase/client";
 import { OriginWordmark } from "@/components/shared/origin-logo";
 
 const signupSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
   email: z
     .string()
-    .trim()
-    .toLowerCase()
+    .min(1, "Email is required")
     .email("Please enter a valid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
@@ -163,12 +162,15 @@ function SignUpForm() {
     const roleToAssign = selectedRole || "student";
 
     try {
+      const normalizedEmail = values.email.trim().toLowerCase();
+      const normalizedName = values.name.trim();
+
       const { data, error } = await supabase.auth.signUp({
-        email: values.email,
+        email: normalizedEmail,
         password: values.password,
         options: {
           data: {
-            full_name: values.name,
+            full_name: normalizedName,
             role: roleToAssign,
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
@@ -183,7 +185,7 @@ function SignUpForm() {
 
       if (data?.user) {
         try {
-          localStorage.setItem("skillsync_user_name", values.name);
+          localStorage.setItem("skillsync_user_name", normalizedName);
         } catch {}
 
         // Upsert user profile with role
@@ -191,8 +193,8 @@ function SignUpForm() {
           await supabase.from("profiles").upsert(
             {
               id: data.user.id,
-              email: data.user.email,
-              full_name: values.name,
+              email: data.user.email || normalizedEmail,
+              full_name: normalizedName,
               role: roleToAssign,
               updated_at: new Date().toISOString(),
             },

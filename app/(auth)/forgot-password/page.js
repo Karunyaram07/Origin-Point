@@ -23,8 +23,7 @@ import { OriginWordmark } from "@/components/shared/origin-logo";
 const forgotSchema = z.object({
   email: z
     .string()
-    .trim()
-    .toLowerCase()
+    .min(1, "Email is required")
     .email("Please enter a valid email address"),
 });
 
@@ -190,13 +189,6 @@ export default function ForgotPasswordPage() {
               Enter your account email below. We&apos;ll send you a secure link to reset
               your password and update your database credentials.
             </p>
-
-            <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/5 p-3.5 text-xs text-muted-foreground flex items-start gap-2.5">
-              <HelpCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>
-                <strong>Signed up with Google?</strong> You can use this to set a password so you can sign in using either Google or your email & password!
-              </span>
-            </div>
 
             {authError && (
               <div className="mb-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2.5">

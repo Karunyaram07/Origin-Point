@@ -520,33 +520,6 @@ export default function LandingPage() {
           </div>
         </section>
       ))}
-
-      {/* ═══════════ Footer ═══════════ */}
-      <footer className="border-t border-border bg-background py-12">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 sm:px-6 md:flex-row">
-          <OriginWordmark className="text-lg font-bold tracking-tight text-foreground" />
-          <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2">
-            {[
-              { href: "/student", label: "Students" },
-              { href: "/industry", label: "Industry" },
-              { href: "/academician", label: "Academicians" },
-              { href: "/institution", label: "Institutions" },
-              { href: "/login", label: "Sign in" },
-            ].map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="underline-sweep relative font-display text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Origin Point
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }
