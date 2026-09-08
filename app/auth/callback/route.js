@@ -8,76 +8,111 @@ export async function GET(request) {
   const code = searchParams.get("code");
   const nextParam = searchParams.get("next");
 
-  if (code) {
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  const supabase = await createClient();
 
-    if (!error && data?.user) {
-      const { user } = data;
-
-      // 1. If this was a password recovery callback, forward directly to reset-password
-      if (nextParam && nextParam.startsWith("/reset-password")) {
-        return NextResponse.redirect(`${origin}${nextParam}`);
-      }
-
-      // 2. Check if user already has an established profile and role
-      const { data: existingProfile } = await supabase
+  // If there's no code, check if we have a session already (handles PKCE verifier mismatch)
+  if (!code) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const { data: profile } = await supabase
         .from("profiles")
-        .select("id, role, full_name")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const mode = searchParams.get("mode") || "login";
-      const queryRole = searchParams.get("role");
-
-      const resolvedRole =
-        existingProfile?.role ||
-        (mode === "signup" ? (queryRole || user.user_metadata?.role) : null);
-
-      // If user came through LOGIN flow but has no registered profile/role, reject and redirect to role selection to sign up
-      if (mode === "login" && (!resolvedRole || !VALID_ROLES.includes(resolvedRole))) {
-        await supabase.auth.signOut();
-        const msg = encodeURIComponent(
-          "No registered account found with this Google email. Please select your role to sign up."
-        );
-        return NextResponse.redirect(`${origin}/select-role?intent=signup&error=${msg}`);
-      }
-
-      const assignedRole = resolvedRole && VALID_ROLES.includes(resolvedRole) ? resolvedRole : (queryRole || "student");
-      const userFullName =
-        user.user_metadata?.full_name ||
-        user.user_metadata?.name ||
-        existingProfile?.full_name ||
-        user.email?.split("@")[0] ||
-        "User";
-
-      // 3. Upsert base profile info while preserving or updating role
-      await supabase.from("profiles").upsert(
-        {
-          id: user.id,
-          email: user.email,
-          full_name: userFullName,
-          avatar_url:
-            user.user_metadata?.avatar_url ||
-            user.user_metadata?.picture ||
-            null,
-          role: assignedRole,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      );
-
-      // 4. Determine destination
-      if (nextParam && nextParam !== "/student") {
-        return NextResponse.redirect(`${origin}${nextParam}`);
-      }
-
-      // Take user to their role dashboard
-      return NextResponse.redirect(`${origin}/${assignedRole}`);
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+      
+      const dashboard = profile?.role ? `/${profile.role}` : "/select-role";
+      return NextResponse.redirect(`${origin}${nextParam || dashboard}`);
     }
+    
+    const errorDescription = searchParams.get("error_description") || "auth_failed";
+    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(errorDescription)}`);
   }
 
-  // Return to login with error if auth failed
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (!error && data?.user) {
+    const { user } = data;
+
+    // 1. If this was a password recovery callback, forward directly to reset-password
+    if (nextParam && nextParam.startsWith("/reset-password")) {
+      return NextResponse.redirect(`${origin}${nextParam}`);
+    }
+
+    // 2. Check if user already has an established profile and role
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id, role, full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const mode = searchParams.get("mode") || "login";
+    const queryRole = searchParams.get("role");
+
+    const resolvedRole =
+      existingProfile?.role ||
+      (mode === "signup" ? (queryRole || user.user_metadata?.role) : null);
+
+    // If user came through LOGIN flow but has no registered profile/role, redirect to role selection
+    if (mode === "login" && (!resolvedRole || !VALID_ROLES.includes(resolvedRole))) {
+      return NextResponse.redirect(`${origin}/select-role?intent=signup`);
+    }
+
+    const assignedRole = resolvedRole && VALID_ROLES.includes(resolvedRole) ? resolvedRole : (queryRole || "student");
+    const userFullName =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      existingProfile?.full_name ||
+      user.email?.split("@")[0] ||
+      "User";
+
+    // 3. Upsert base profile info while preserving or updating role
+    await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email,
+        full_name: userFullName,
+        avatar_url:
+          user.user_metadata?.avatar_url ||
+          user.user_metadata?.picture ||
+          null,
+        role: assignedRole,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+
+    // 4. Determine destination
+    if (nextParam && nextParam !== "/student") {
+      return NextResponse.redirect(`${origin}${nextParam}`);
+    }
+
+    return NextResponse.redirect(`${origin}/${assignedRole}`);
+  }
+
+  // --- FALLBACK: exchangeCodeForSession failed (e.g. PKCE verifier mismatch on first attempt) ---
+  // If the user already has a valid session (from a just-completed signup or prior auth),
+  // redirect them to their dashboard instead of bouncing them to the error/login page.
+  try {
+    const { data: fallbackData } = await supabase.auth.getUser();
+    if (fallbackData?.user) {
+      const { data: fallbackProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", fallbackData.user.id)
+        .maybeSingle();
+
+      const fallbackRole = fallbackProfile?.role;
+      if (fallbackRole && VALID_ROLES.includes(fallbackRole)) {
+        // Already authenticated — send straight to dashboard
+        return NextResponse.redirect(`${origin}/${fallbackRole}`);
+      }
+      // Authenticated but no role yet — pick a role
+      return NextResponse.redirect(`${origin}/select-role`);
+    }
+  } catch (_) {
+    // getUser failed, fall through to error redirect
+  }
+
   const errorDescription = searchParams.get("error_description") || "auth_failed";
   return NextResponse.redirect(
     `${origin}/login?error=${encodeURIComponent(errorDescription)}`
