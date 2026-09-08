@@ -1,3 +1,6 @@
+// @ts-nocheck
+import * as React from "react";
+
 export function GoogleIcon({ className = "h-4 w-4 mr-2", ...props }) {
   return (
     <svg

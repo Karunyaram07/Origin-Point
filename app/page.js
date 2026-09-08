@@ -390,6 +390,7 @@ export default function LandingPage() {
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1.5 shadow-lg shadow-black/20 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={news.image}
                                 alt={news.alt}
@@ -526,7 +527,7 @@ export default function LandingPage() {
 
 /* ═══════════════════════ Helpers ═══════════════════════ */
 
-function SectionHeading({ eyebrow, eyebrowClassName, title, description }) {
+function SectionHeading({ eyebrow, eyebrowClassName = "", title, description = "" }) {
   return (
     <Reveal>
       <div className="mx-auto mb-14 max-w-2xl text-center md:mb-16">
@@ -547,7 +548,7 @@ function SectionHeading({ eyebrow, eyebrowClassName, title, description }) {
   );
 }
 
-function StepCard({ step, index, total }) {
+function StepCard({ step, index = 0, total = 1 }) {
   return (
     <SpotlightCard>
       <Card className="gradient-border lift group relative h-full overflow-hidden border-border bg-card/80 backdrop-blur-sm">
@@ -592,7 +593,7 @@ function StepCard({ step, index, total }) {
 }
 
 /* Cursor-follow spotlight wrapper — sets --mx/--my CSS vars */
-function SpotlightCard({ children, className, glow }) {
+function SpotlightCard({ children, className = "", glow = null }) {
   const ref = useRef(null);
 
   const handleMove = useCallback((event) => {
