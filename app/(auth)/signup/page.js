@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 import { OriginWordmark } from "@/components/shared/origin-logo";
+import OptionWheel from "@/components/ui/OptionWheel";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -108,6 +109,14 @@ const roleOptions = [
   },
 ];
 
+const ROLE_ACCENTS = {
+  student:     "#6366f1",
+  industry:    "#f59e0b",
+  academician: "#10b981",
+  institution: "#3b82f6",
+};
+const WHEEL_LABELS = roleOptions.map((r) => r.label);
+
 function SignUpForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -117,22 +126,24 @@ function SignUpForm() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [signupSuccessMsg, setSignupSuccessMsg] = useState("");
-  const [selectedRole, setSelectedRole] = useState(null);
+  const [selectedRole, setSelectedRole] = useState("student");
+  const [wheelIndex, setWheelIndex] = useState(0);
 
   useEffect(() => {
     const queryRole = searchParams.get("role");
     if (queryRole && roleOptions.some((r) => r.id === queryRole)) {
       setSelectedRole(queryRole);
+      const idx = roleOptions.findIndex((r) => r.id === queryRole);
+      if (idx !== -1) setWheelIndex(idx);
       setStep(2);
-      try {
-        localStorage.setItem("selected_role", queryRole);
-      } catch {}
+      try { localStorage.setItem("selected_role", queryRole); } catch {}
     } else {
       try {
         const saved = localStorage.getItem("selected_role");
         if (saved && roleOptions.some((r) => r.id === saved)) {
           setSelectedRole(saved);
-          // Don't auto-advance to step 2 from localStorage — let user re-confirm
+          const idx = roleOptions.findIndex((r) => r.id === saved);
+          if (idx !== -1) setWheelIndex(idx);
         }
       } catch {}
     }
@@ -449,139 +460,147 @@ function SignUpForm() {
     );
   }
 
-  // Step 1: Full shell layout with role cards
+  // Step 1: OptionWheel role selector — cinematic dark layout
+  const activeRole = roleOptions[wheelIndex] || roleOptions[0];
+  const accent = ROLE_ACCENTS[activeRole.id] || "#6366f1";
+  const { icon: Icon, subtitle, desc, features } = activeRole;
+
   return (
-    <div className="auth-page-shell min-h-screen flex flex-col justify-between p-4 sm:p-6 md:p-10">
-      {/* Top Header */}
-      <div className="w-full max-w-6xl mx-auto flex items-center justify-between pb-6 border-b border-border/40">
-        <Link href="/" className="inline-flex items-center gap-2">
-          <OriginWordmark className="text-xl font-bold tracking-tight" />
+    <div
+      className="h-screen w-full flex flex-col overflow-hidden"
+      style={{ background: "hsl(201,100%,8%)", fontFamily: "'Inter', sans-serif", color: "#fff" }}
+    >
+      {/* Ambient accent glow */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 transition-all duration-700"
+        style={{ background: `radial-gradient(ellipse 60% 55% at 70% 50%, ${accent}22 0%, transparent 70%)` }}
+      />
+
+      {/* Nav */}
+      <nav className="relative z-10 flex items-center justify-between px-8 py-5 max-w-7xl mx-auto w-full shrink-0">
+        <Link
+          href="/"
+          className="text-2xl tracking-tight text-white leading-none select-none"
+          style={{ fontFamily: "'Instrument Serif', serif" }}
+        >
+          Origin Point<sup className="text-xs text-white/50 ml-0.5">®</sup>
         </Link>
-        <p className="text-xs sm:text-sm text-muted-foreground">
+        <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-foreground hover:underline">
+          <Link href="/login" className="text-white hover:underline font-medium">
             Log In
           </Link>
         </p>
-      </div>
+      </nav>
 
-      {/* Main Content */}
-      <div className="w-full max-w-6xl mx-auto py-8 sm:py-12">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key="step-role"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.35 }}
+      {/* Two-column layout */}
+      <div className="relative z-10 flex flex-1 items-center max-w-7xl mx-auto w-full px-6 md:px-12 gap-12 overflow-hidden">
+
+        {/* LEFT — OptionWheel */}
+        <div className="flex-1 flex flex-col" style={{ height: "100%" }}>
+          <p className="text-xs tracking-widest uppercase mb-4 pl-1 shrink-0" style={{ color: "rgba(255,255,255,0.3)", fontFamily: "'Inter', sans-serif" }}>
+            Sign up as
+          </p>
+          <div style={{ flex: 1, position: "relative" }}>
+          <OptionWheel
+            items={WHEEL_LABELS}
+            defaultSelected={wheelIndex}
+            onChange={(index) => {
+              setWheelIndex(index);
+              setSelectedRole(roleOptions[index].id);
+            }}
+            textColor="rgba(255,255,255,0.25)"
+            activeColor="#ffffff"
+            side="left"
+            fontSize={3}
+            spacing={1.4}
+            curve={1}
+            tilt={6}
+            blur={2}
+            fade={0.25}
+            minOpacity={0.04}
+            smoothing={200}
+            inset={80}
+            loop={false}
+            draggable
+          />
+          </div>
+        </div>
+
+        {/* RIGHT — detail card */}
+        <div
+          className="hidden md:flex flex-col justify-between rounded-3xl p-8 w-[400px] shrink-0 transition-all duration-500"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: `1px solid ${accent}40`,
+            boxShadow: `0 0 60px ${accent}18`,
+            minHeight: 380,
+          }}
+        >
+          <div>
+            <div
+              className="h-14 w-14 rounded-2xl flex items-center justify-center mb-6 transition-colors duration-500"
+              style={{ background: `${accent}20`, border: `1px solid ${accent}40` }}
+            >
+              <Icon size={26} strokeWidth={1.4} style={{ color: accent }} />
+            </div>
+
+            <span
+              className="text-xs font-semibold px-2.5 py-1 rounded-full mb-3 inline-block transition-colors duration-500"
+              style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}35` }}
+            >
+              {subtitle}
+            </span>
+
+            <h2
+              className="text-3xl font-normal mb-3 mt-2 transition-all duration-300"
+              style={{ fontFamily: "'Instrument Serif', serif", color: "#fff" }}
+            >
+              {activeRole.label}
+            </h2>
+
+            <p className="text-sm leading-relaxed mb-7" style={{ color: "rgba(255,255,255,0.55)" }}>
+              {desc}
+            </p>
+
+            <div className="space-y-3">
+              {features.map((feat, i) => (
+                <div key={i} className="flex items-start gap-2.5 text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
+                  <ShieldCheck size={14} strokeWidth={1.5} className="mt-0.5 shrink-0" style={{ color: accent }} />
+                  {feat}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={() => handleRoleSelect(activeRole.id)}
+            className="mt-8 w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] cursor-pointer"
+            style={{ background: accent, color: "#fff", boxShadow: `0 0 30px ${accent}55` }}
           >
-            {/* Heading */}
-            <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-14">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-4 border border-primary/20">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Step 1 of 2</span>
-              </div>
-              <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3">
-                Choose Your Role
-              </h1>
-              <p className="text-muted-foreground text-sm sm:text-base leading-relaxed">
-                Pick the role that best describes you. Your workspace, tools, and analytics
-                will be tailored to match.
-              </p>
-            </div>
+            Continue as {activeRole.label}
+            <ArrowRight size={16} strokeWidth={2} />
+          </button>
+        </div>
 
-            {/* 4 Roles Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-              {roleOptions.map((role, idx) => {
-                const Icon = role.icon;
-                const isHighlighted = selectedRole === role.id;
-                return (
-                  <motion.div
-                    key={role.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, delay: idx * 0.08 }}
-                    className={cn(
-                      "relative group rounded-3xl border bg-card/80 backdrop-blur-md p-6 flex flex-col justify-between transition-all duration-300 shadow-sm cursor-pointer",
-                      isHighlighted
-                        ? "border-primary ring-2 ring-primary/30 shadow-xl bg-card"
-                        : "border-border/80 hover:border-primary/50 hover:shadow-lg hover:-translate-y-1"
-                    )}
-                    onClick={() => handleRoleSelect(role.id)}
-                  >
-                    {isHighlighted && (
-                      <div className="absolute top-4 right-4 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider">
-                        <Check className="h-3 w-3" />
-                        Selected
-                      </div>
-                    )}
-
-                    <div>
-                      {/* Icon */}
-                      <div
-                        className={cn(
-                          "h-12 w-12 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white shadow-md mb-5",
-                          role.gradient
-                        )}
-                      >
-                        <Icon className="h-6 w-6" />
-                      </div>
-
-                      <div className="mb-2">
-                        <span
-                          className={cn(
-                            "inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md border mb-2",
-                            role.badgeColor
-                          )}
-                        >
-                          {role.subtitle}
-                        </span>
-                        <h3 className="font-display text-xl font-bold tracking-tight">
-                          {role.label}
-                        </h3>
-                      </div>
-
-                      <p className="text-muted-foreground text-xs leading-5 mb-5">
-                        {role.desc}
-                      </p>
-
-                      {/* Features */}
-                      <div className="space-y-2 mb-6 pt-4 border-t border-border/50">
-                        {role.features.map((feat, fIdx) => (
-                          <div
-                            key={fIdx}
-                            className="flex items-start gap-2 text-xs text-foreground/80"
-                          >
-                            <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-                            <span>{feat}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* CTA */}
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRoleSelect(role.id);
-                      }}
-                      className={cn(
-                        "w-full h-11 rounded-xl font-semibold gap-2 transition-all cursor-pointer",
-                        isHighlighted
-                          ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
-                          : "bg-muted hover:bg-primary hover:text-primary-foreground text-foreground"
-                      )}
-                    >
-                      <span>Continue as {role.label}</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </motion.div>
-        </AnimatePresence>
+        {/* Mobile CTA */}
+        <div className="md:hidden fixed bottom-6 left-0 right-0 px-6 z-20">
+          <button
+            onClick={() => handleRoleSelect(activeRole.id)}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition-all duration-200 cursor-pointer"
+            style={{ background: accent, color: "#fff" }}
+          >
+            Continue as {activeRole.label}
+            <ArrowRight size={16} strokeWidth={2} />
+          </button>
+        </div>
       </div>
+
+      <p className="relative z-10 text-center text-xs pb-6" style={{ color: "rgba(255,255,255,0.2)" }}>
+        Scroll · Drag · Arrow keys to navigate
+      </p>
     </div>
   );
 }

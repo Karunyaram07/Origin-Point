@@ -1,89 +1,84 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   GraduationCap,
   Building2,
   BookOpen,
   Landmark,
   ArrowRight,
-  Check,
-  Sparkles,
-  LogOut,
   ShieldCheck,
+  LogOut,
   AlertCircle,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
-import { OriginWordmark } from "@/components/shared/origin-logo";
+import OptionWheel from "@/components/ui/OptionWheel";
 
+/* ── Role data ───────────────────────────────────────────── */
 const roleOptions = [
   {
     id: "student",
     label: "Student",
     subtitle: "Learners & Candidates",
-    desc: "Assess skills, build verified portfolio & land high-impact internships.",
+    desc: "Assess your skills, build a verified portfolio and land high-impact internships.",
     features: [
       "AI Skill Diagnostics & Benchmarking",
       "Dynamic Career & Internship Matcher",
       "Cryptographically Verified Credential Hub",
     ],
-    icon: GraduationCap,
-    gradient: "from-indigo-500 to-cyan-400",
-    badgeColor: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+    Icon: GraduationCap,
+    accent: "#6366f1",        // indigo
     redirect: "/student",
   },
   {
     id: "industry",
     label: "Industry",
     subtitle: "Recruiters & Companies",
-    desc: "Post opportunities, discover verified talent & streamline technical hiring.",
+    desc: "Post opportunities, discover verified talent and streamline technical hiring.",
     features: [
       "AI-Powered Candidate Shortlisting",
       "Role-Specific Skill Gap Reports",
       "Direct Internship & Project Pipeline",
     ],
-    icon: Building2,
-    gradient: "from-amber-500 to-orange-400",
-    badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    Icon: Building2,
+    accent: "#f59e0b",        // amber
     redirect: "/industry",
   },
   {
     id: "academician",
     label: "Academician",
     subtitle: "Faculty, Mentors & Guides",
-    desc: "Drive FDPs, consultancy, research collaborations & student mentorship.",
+    desc: "Drive FDPs, consultancy, research collaborations and student mentorship.",
     features: [
       "Student Skill Analytics & Progress",
       "Inter-College Research Matchmaking",
       "Faculty Development & Grant Tracking",
     ],
-    icon: BookOpen,
-    gradient: "from-emerald-500 to-teal-400",
-    badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    Icon: BookOpen,
+    accent: "#10b981",        // emerald
     redirect: "/academician",
   },
   {
     id: "institution",
     label: "Institution",
     subtitle: "Universities & Departments",
-    desc: "Departmental intelligence, placement analytics & accreditation-ready data.",
+    desc: "Departmental intelligence, placement analytics and accreditation-ready data.",
     features: [
       "Real-time Placement Readiness Metrics",
       "Outcome-Based Curriculum Feedback",
       "NIRF / NAAC Data Alignment Hub",
     ],
-    icon: Landmark,
-    gradient: "from-blue-500 to-indigo-500",
-    badgeColor: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    Icon: Landmark,
+    accent: "#3b82f6",        // blue
     redirect: "/institution",
   },
 ];
 
+const WHEEL_LABELS = roleOptions.map((r) => r.label);
+
+/* ── Main page content ───────────────────────────────────── */
 function SelectRoleContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -91,9 +86,11 @@ function SelectRoleContent() {
   const errorMessage = searchParams.get("error");
 
   const [currentUser, setCurrentUser] = useState(null);
-  const [selectedRole, setSelectedRole] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+
+  const activeRole = roleOptions[selectedIndex];
 
   useEffect(() => {
     async function loadUser() {
@@ -101,44 +98,43 @@ function SelectRoleContent() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setCurrentUser(user);
-
-          // Check if role is already chosen in profile
           const { data: profile } = await supabase
             .from("profiles")
             .select("role")
             .eq("id", user.id)
             .maybeSingle();
-
-          if (profile?.role && roleOptions.some((r) => r.id === profile.role)) {
-            setSelectedRole(profile.role);
+          if (profile?.role) {
+            const idx = roleOptions.findIndex((r) => r.id === profile.role);
+            if (idx !== -1) setSelectedIndex(idx);
           }
         } else {
-          // Check localStorage for previously chosen role
           const savedRole = localStorage.getItem("selected_role");
-          if (savedRole && roleOptions.some((r) => r.id === savedRole)) {
-            setSelectedRole(savedRole);
+          if (savedRole) {
+            const idx = roleOptions.findIndex((r) => r.id === savedRole);
+            if (idx !== -1) setSelectedIndex(idx);
           }
         }
       } catch (err) {
-        console.error("Error loading user in SelectRole:", err);
+        console.error("Error loading user:", err);
       } finally {
         setIsLoadingUser(false);
       }
     }
     loadUser();
-  }, [router]);
+  }, []);
 
-  const handleSelectRole = async (roleId) => {
-    setSelectedRole(roleId);
+  const handleWheelChange = useCallback((index) => {
+    setSelectedIndex(index);
+  }, []);
+
+  const handleConfirm = async () => {
+    const roleId = activeRole.id;
     setIsSubmitting(true);
     try {
       localStorage.setItem("selected_role", roleId);
       document.cookie = `skillsync_role=${roleId}; path=/; max-age=31536000`;
-    } catch {
-      // localStorage may fail in private mode
-    }
+    } catch { /* private mode */ }
 
-    // If this is signup intent or user has no session, route directly to signup page for that role
     if (isSignupIntent || !currentUser) {
       router.push(`/signup?role=${roleId}`);
       return;
@@ -146,7 +142,6 @@ function SelectRoleContent() {
 
     try {
       if (currentUser?.id) {
-        // 1. Update profiles table
         await supabase.from("profiles").upsert(
           {
             id: currentUser.id,
@@ -161,19 +156,12 @@ function SelectRoleContent() {
           },
           { onConflict: "id" }
         );
-
-        // 2. Update auth user metadata
-        await supabase.auth.updateUser({
-          data: { role: roleId },
-        });
+        await supabase.auth.updateUser({ data: { role: roleId } });
       }
-
-      const roleOption = roleOptions.find((r) => r.id === roleId);
-      router.push(roleOption?.redirect || `/${roleId}`);
+      router.push(activeRole.redirect || `/${roleId}`);
     } catch (err) {
       console.error("Failed to set role:", err);
-      const roleOption = roleOptions.find((r) => r.id === roleId);
-      router.push(roleOption?.redirect || `/${roleId}`);
+      router.push(activeRole.redirect || `/${roleId}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -185,177 +173,191 @@ function SelectRoleContent() {
     router.push("/login");
   };
 
-  const userDisplayName =
-    currentUser?.user_metadata?.full_name ||
-    currentUser?.user_metadata?.name ||
-    currentUser?.email?.split("@")[0] ||
-    "";
+  const { icon: Icon, accent, subtitle, desc, features } = activeRole;
 
   return (
-    <div className="auth-page-shell min-h-screen flex flex-col justify-between p-4 sm:p-6 md:p-10">
-      {/* Top Header */}
-      <div className="w-full max-w-6xl mx-auto flex items-center justify-between pb-6 border-b border-border/40">
-        <Link href="/" className="inline-flex items-center gap-2">
-          <OriginWordmark className="text-xl font-bold tracking-tight" />
+    /* Full-screen dark cinematic shell matching the landing page */
+    <div
+      className="min-h-screen w-full flex flex-col overflow-hidden"
+      style={{ background: "hsl(201,100%,8%)", fontFamily: "'Inter', sans-serif", color: "#fff" }}
+    >
+      {/* ── Subtle animated gradient blob that follows the accent colour ── */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 transition-all duration-700"
+        style={{
+          background: `radial-gradient(ellipse 60% 55% at 70% 50%, ${accent}22 0%, transparent 70%)`,
+        }}
+      />
+
+      {/* ── Nav ── */}
+      <nav className="relative z-10 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto w-full">
+        <Link
+          href="/"
+          className="text-2xl tracking-tight text-white leading-none select-none"
+          style={{ fontFamily: "'Instrument Serif', serif" }}
+        >
+          Origin Point<sup className="text-xs text-white/50 ml-0.5">®</sup>
         </Link>
+
         {currentUser ? (
           <button
             onClick={handleLogout}
-            className="inline-flex items-center gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border"
+            className="flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors"
           >
-            <LogOut className="h-3.5 w-3.5" />
-            <span>Sign Out</span>
+            <LogOut size={15} strokeWidth={1.5} />
+            Sign Out
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <Link
-              href="/login"
-              className="inline-flex items-center text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/60 hover:border-border"
-            >
-              Log In
-            </Link>
-          </div>
+          <Link
+            href="/login"
+            className="text-sm text-white/50 hover:text-white transition-colors"
+          >
+            Log In
+          </Link>
         )}
-      </div>
+      </nav>
 
-      {/* Main Content */}
-      <div className="w-full max-w-6xl mx-auto py-8 sm:py-12">
-        {errorMessage && (
-          <div className="mb-8 p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center justify-between gap-3 max-w-2xl mx-auto">
-            <div className="flex items-center gap-2.5">
-              <AlertCircle className="h-5 w-5 shrink-0" />
-              <span className="font-medium">{decodeURIComponent(errorMessage)}</span>
-            </div>
-            <Link
-              href="/login"
-              className="text-xs underline hover:opacity-80 shrink-0 font-semibold"
-            >
+      {/* ── Error banner ── */}
+      {errorMessage && (
+        <div className="relative z-10 mx-auto max-w-xl w-full px-6 mt-2">
+          <div className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm"
+            style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", color: "#fca5a5" }}>
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{decodeURIComponent(errorMessage)}</span>
+            <Link href="/login" className="ml-auto text-xs underline opacity-80 hover:opacity-100 shrink-0">
               Back to Login
             </Link>
           </div>
-        )}
+        </div>
+      )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="text-center max-w-2xl mx-auto mb-10 sm:mb-14"
+      {/* ── Two-column layout ── */}
+      <div className="relative z-10 flex flex-1 items-center max-w-7xl mx-auto w-full px-6 md:px-12 py-10 gap-12">
+
+        {/* LEFT — OptionWheel */}
+        <div className="flex-1 flex flex-col justify-center" style={{ minHeight: 420 }}>
+          {/* Tiny heading above the wheel */}
+          <p className="text-xs tracking-widest uppercase text-white/35 mb-6 pl-1"
+            style={{ fontFamily: "'Inter', sans-serif" }}>
+            {isSignupIntent ? "Sign up as" : "Enter as"}
+          </p>
+
+          <OptionWheel
+            items={WHEEL_LABELS}
+            defaultSelected={selectedIndex}
+            onChange={handleWheelChange}
+            textColor="rgba(255,255,255,0.28)"
+            activeColor="#ffffff"
+            side="left"
+            fontSize={3.8}
+            spacing={1.35}
+            curve={1}
+            tilt={7}
+            blur={2.5}
+            fade={0.3}
+            minOpacity={0.04}
+            smoothing={180}
+            inset={4}
+            loop={false}
+            draggable
+          />
+        </div>
+
+        {/* RIGHT — Role detail card */}
+        <div
+          className="hidden md:flex flex-col justify-between rounded-3xl p-8 w-[400px] shrink-0 transition-all duration-500"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: `1px solid ${accent}40`,
+            boxShadow: `0 0 60px ${accent}18`,
+            minHeight: 380,
+          }}
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-4 border border-primary/20">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>{isSignupIntent ? "Get Started" : "Choose Your Role"}</span>
+          {/* Icon + subtitle */}
+          <div>
+            <div
+              className="h-14 w-14 rounded-2xl flex items-center justify-center mb-6 transition-colors duration-500"
+              style={{ background: `${accent}20`, border: `1px solid ${accent}40` }}
+            >
+              <Icon size={26} strokeWidth={1.4} style={{ color: accent }} />
+            </div>
+
+            <span
+              className="text-xs font-semibold px-2.5 py-1 rounded-full mb-3 inline-block transition-colors duration-500"
+              style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}35` }}
+            >
+              {subtitle}
+            </span>
+
+            <h2
+              className="text-3xl font-normal mb-3 transition-all duration-300"
+              style={{ fontFamily: "'Instrument Serif', serif", color: "#fff" }}
+            >
+              {activeRole.label}
+            </h2>
+
+            <p className="text-sm leading-relaxed mb-7" style={{ color: "rgba(255,255,255,0.55)" }}>
+              {desc}
+            </p>
+
+            {/* Feature list */}
+            <div className="space-y-3">
+              {features.map((feat, i) => (
+                <div key={i} className="flex items-start gap-2.5 text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
+                  <ShieldCheck size={14} strokeWidth={1.5} className="mt-0.5 shrink-0" style={{ color: accent }} />
+                  {feat}
+                </div>
+              ))}
+            </div>
           </div>
 
-          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3">
-            {isSignupIntent
-              ? "Select Role to Create Account"
-              : currentUser && userDisplayName
-              ? `Welcome, ${userDisplayName}!`
-              : "Select Your Workspace"}
-          </h1>
-          <p className="text-muted-foreground text-sm sm:text-base leading-relaxed">
-            {isSignupIntent
-              ? "Choose the role that fits you best. You'll complete registration on the next step."
-              : "Please choose the role that best describes you to customize your workspace, analytics, and collaboration tools."}
-          </p>
-        </motion.div>
+          {/* CTA */}
+          <button
+            onClick={handleConfirm}
+            disabled={isSubmitting || isLoadingUser}
+            className="mt-8 w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            style={{
+              background: accent,
+              color: "#fff",
+              boxShadow: `0 0 30px ${accent}55`,
+            }}
+          >
+            {isSubmitting ? "Redirecting…" : isSignupIntent ? `Sign Up as ${activeRole.label}` : `Enter as ${activeRole.label}`}
+            <ArrowRight size={16} strokeWidth={2} />
+          </button>
+        </div>
 
-        {/* 4 Roles Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {roleOptions.map((role, idx) => {
-            const Icon = role.icon;
-            const isSelected = selectedRole === role.id;
-            return (
-              <motion.div
-                key={role.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: idx * 0.08 }}
-                className={cn(
-                  "relative group rounded-3xl border bg-card/80 backdrop-blur-md p-6 flex flex-col justify-between transition-all duration-300 shadow-sm",
-                  isSelected
-                    ? "border-primary ring-2 ring-primary/30 shadow-xl bg-card"
-                    : "border-border/80 hover:border-primary/50 hover:shadow-lg hover:-translate-y-1"
-                )}
-              >
-                {/* Active Indicator Badge */}
-                {isSelected && (
-                  <div className="absolute top-4 right-4 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider">
-                    <Check className="h-3 w-3" />
-                    Selected
-                  </div>
-                )}
-
-                <div>
-                  {/* Icon Header */}
-                  <div
-                    className={cn(
-                      "h-12 w-12 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white shadow-md mb-5",
-                      role.gradient
-                    )}
-                  >
-                    <Icon className="h-6 w-6" />
-                  </div>
-
-                  <div className="mb-2">
-                    <span
-                      className={cn(
-                        "inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md border mb-2",
-                        role.badgeColor
-                      )}
-                    >
-                      {role.subtitle}
-                    </span>
-                    <h3 className="font-display text-xl font-bold tracking-tight">
-                      {role.label}
-                    </h3>
-                  </div>
-
-                  <p className="text-muted-foreground text-xs leading-5 mb-5">
-                    {role.desc}
-                  </p>
-
-                  {/* Highlights list */}
-                  <div className="space-y-2 mb-6 pt-4 border-t border-border/50">
-                    {role.features.map((feat, fIdx) => (
-                      <div
-                        key={fIdx}
-                        className="flex items-start gap-2 text-xs text-foreground/80"
-                      >
-                        <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-                        <span>{feat}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Continue button */}
-                <Button
-                  onClick={() => handleSelectRole(role.id)}
-                  disabled={isSubmitting}
-                  className={cn(
-                    "w-full h-11 rounded-xl font-semibold gap-2 transition-all cursor-pointer",
-                    isSelected
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
-                      : "bg-muted hover:bg-primary hover:text-primary-foreground text-foreground"
-                  )}
-                >
-                  <span>{isSignupIntent ? `Sign Up as ${role.label}` : `Enter as ${role.label}`}</span>
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </motion.div>
-            );
-          })}
+        {/* Mobile CTA (below wheel on small screens) */}
+        <div className="md:hidden fixed bottom-6 left-0 right-0 px-6 z-20">
+          <button
+            onClick={handleConfirm}
+            disabled={isSubmitting || isLoadingUser}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition-all duration-200 hover:scale-[1.01] disabled:opacity-50 cursor-pointer"
+            style={{ background: accent, color: "#fff" }}
+          >
+            {isSubmitting ? "Redirecting…" : `Continue as ${activeRole.label}`}
+            <ArrowRight size={16} strokeWidth={2} />
+          </button>
         </div>
       </div>
 
+      {/* Bottom hint */}
+      <p className="relative z-10 text-center text-xs pb-6" style={{ color: "rgba(255,255,255,0.2)" }}>
+        Scroll · Drag · Arrow keys to navigate
+      </p>
     </div>
   );
 }
 
 export default function SelectRolePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "hsl(201,100%,8%)", color: "#fff" }}>
+        Loading…
+      </div>
+    }>
       <SelectRoleContent />
     </Suspense>
   );
