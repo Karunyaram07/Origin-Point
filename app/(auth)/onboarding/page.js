@@ -192,7 +192,31 @@ export default function OnboardingPage() {
     }));
   };
 
-  const completeOnboarding = async () => {
+  const getRecommendedDiagnostic = () => {
+    const skillToTopicMap = {
+      JavaScript: { topicId: "web-dev", name: "Web Development" },
+      React: { topicId: "web-dev", name: "Web Development" },
+      TypeScript: { topicId: "web-dev", name: "Web Development" },
+      "Node.js": { topicId: "web-dev", name: "Web Development" },
+      Python: { topicId: "dsa", name: "Programming & DSA" },
+      Java: { topicId: "dsa", name: "Programming & DSA" },
+      SQL: { topicId: "db-sql", name: "Database & SQL" },
+      "Data Analysis": { topicId: "db-sql", name: "Database & SQL" },
+      "Machine Learning": { topicId: "ai-ml", name: "Artificial Intelligence & ML" },
+      "Cloud/AWS": { topicId: "cloud-devops", name: "Cloud & DevOps" },
+      Flutter: { topicId: "web-dev", name: "Web Development" },
+      "UI/UX Design": { topicId: "web-dev", name: "Web Development" },
+    };
+
+    for (const skill of formData.selectedSkills) {
+      if (skillToTopicMap[skill]) {
+        return skillToTopicMap[skill];
+      }
+    }
+    return { topicId: "web-dev", name: "Web Development" };
+  };
+
+  const completeOnboarding = async (destination = "/student") => {
     setIsSaving(true);
     setAuthError("");
 
@@ -216,7 +240,7 @@ export default function OnboardingPage() {
         return;
       }
 
-      router.replace("/student");
+      router.replace(destination);
     } catch (error) {
       setAuthError(error.message || "Could not save your onboarding details. Please try again.");
     } finally {
@@ -506,14 +530,25 @@ export default function OnboardingPage() {
                     )}
                   </div>
 
-                  <Button
-                    onClick={completeOnboarding}
-                    disabled={isSaving}
-                    className="bg-gradient-to-r from-indigo-500 to-cyan-400 text-white border-0 hover:opacity-90 h-12 px-8"
-                  >
-                    {isSaving ? "Saving..." : "Go to Dashboard"}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <Button
+                      onClick={() => completeOnboarding(`/student/assessment/take/${getRecommendedDiagnostic().topicId}/beginner`)}
+                      disabled={isSaving}
+                      className="w-full sm:w-auto bg-gradient-to-r from-indigo-500 to-cyan-400 text-white border-0 hover:opacity-90 h-12 px-6 shadow-md cursor-pointer"
+                    >
+                      {isSaving ? "Saving..." : `Start ${getRecommendedDiagnostic().name} Test`}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => completeOnboarding("/student")}
+                      disabled={isSaving}
+                      className="w-full sm:w-auto h-12 px-6 border-border/80 hover:bg-muted cursor-pointer"
+                    >
+                      Go to Dashboard (Take Later)
+                    </Button>
+                  </div>
                 </div>
               )}
             </motion.div>

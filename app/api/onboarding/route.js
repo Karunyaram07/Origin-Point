@@ -71,7 +71,11 @@ export async function POST(request) {
 
     const { data: completedProfile, error: completionError } = await supabase
       .from("profiles")
-      .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+      .update({
+        location: location || null,
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", user.id)
       .eq("role", "student")
       .select("id")
