@@ -205,4 +205,29 @@ All static placeholders and mock data on the student workspace have been replace
 1. **Dynamic Skill Badges:** Automatically maps `student_profiles.assessment_scores` to domain badges (`Web Development`, `Database & SQL`, `Algorithms & DSA`, `System Design`), marking badges as earned (with proficiency tier) if score $\ge$ 50%.
 2. **Dynamic Experience Timeline:** Includes the student's real university program and verified assessment completion records with timestamp and score.
 
+---
+
+## 10. Deployment & Authentication Configuration (Vercel & Supabase)
+
+When deploying to Vercel (both Preview and Production deployments), follow these setup steps to ensure authentication and OAuth work seamlessly:
+
+### A. Supabase Dashboard &rarr; URL Configuration (Crucial for Google OAuth)
+1. Navigate to [Supabase Dashboard](https://supabase.com/dashboard) &rarr; Select your project &rarr; **Authentication** &rarr; **URL Configuration**.
+2. **Site URL:** Keep as primary production domain (e.g., `https://origin-point.vercel.app` or `http://localhost:3000` for local dev).
+3. **Redirect URLs:** You **MUST** add wildcards for Vercel preview and production domains so Supabase does not fall back to `localhost:3000`:
+   - `http://localhost:3000/**`
+   - `https://*.vercel.app/**`
+   - `https://originpoint-*.vercel.app/**`
+   *(Without these wildcards in Redirect URLs, Google OAuth will reject the Vercel callback URL and redirect the user to `http://localhost:3000/?code=...`, resulting in "This site can't be reached".)*
+
+### B. Vercel Environment Variables
+Ensure the following are set across **Production**, **Preview**, and **Development** in Vercel Project Settings &rarr; Environment Variables:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY`
+
+Client code in `lib/supabase/client.js`, `lib/supabase/middleware.js`, and `lib/supabase/server.js` also provides a resilient fallback to the active Supabase project's anon key to prevent "Invalid API key" errors if preview builds omit public environment variables.
+
+
 
