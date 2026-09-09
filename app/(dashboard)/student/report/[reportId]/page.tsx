@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 
 interface EvaluatedQuestion {
   id: number;
@@ -68,43 +69,106 @@ export default function AssessmentDetailPage() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const allSavedRaw = localStorage.getItem("skillsync_all_assessment_reports");
-      const latestSavedRaw = localStorage.getItem("skillsync_latest_assessment_report");
-
-      let foundReport: AssessmentReport | null = null;
-
-      if (allSavedRaw) {
-        const parsed: AssessmentReport[] = JSON.parse(allSavedRaw);
-        if (Array.isArray(parsed)) {
-          foundReport =
-            parsed.find(
-              (r) =>
-                r.id === reportId ||
-                r.id.toLowerCase().includes(reportId.toLowerCase()) ||
-                reportId.toLowerCase().includes(r.id.toLowerCase())
-            ) || null;
+    async function loadReport() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsLoaded(true);
+          return;
         }
-      }
 
-      if (!foundReport && latestSavedRaw) {
-        const parsed: AssessmentReport = JSON.parse(latestSavedRaw);
-        if (
-          parsed &&
-          (parsed.id === reportId ||
-            parsed.topicTitle?.toLowerCase().replace(/\s+/g, "-") === reportId.toLowerCase() ||
-            !allSavedRaw)
-        ) {
-          foundReport = parsed;
+        const userReportsKey = `skillsync_${user.id}_all_assessment_reports`;
+        const userLatestKey = `skillsync_${user.id}_latest_assessment_report`;
+
+        let foundReport: AssessmentReport | null = null;
+
+        // 1. Check user-scoped local storage
+        try {
+          const allSavedRaw = localStorage.getItem(userReportsKey);
+          if (allSavedRaw) {
+            const parsed: AssessmentReport[] = JSON.parse(allSavedRaw);
+            if (Array.isArray(parsed)) {
+              foundReport =
+                parsed.find(
+                  (r) =>
+                    r.id === reportId ||
+                    r.id.toLowerCase().includes(reportId.toLowerCase()) ||
+                    reportId.toLowerCase().includes(r.id.toLowerCase())
+                ) || null;
+            }
+          }
+        } catch {}
+
+        if (!foundReport) {
+          try {
+            const latestSavedRaw = localStorage.getItem(userLatestKey);
+            if (latestSavedRaw) {
+              const parsed: AssessmentReport = JSON.parse(latestSavedRaw);
+              if (
+                parsed &&
+                (parsed.id === reportId ||
+                  parsed.topicTitle?.toLowerCase().replace(/\s+/g, "-") === reportId.toLowerCase())
+              ) {
+                foundReport = parsed;
+              }
+            }
+          } catch {}
         }
-      }
 
-      setReport(foundReport);
-    } catch (e) {
-      console.warn("Could not load report from localStorage:", e);
-    } finally {
-      setIsLoaded(true);
+        // 2. If not found in user storage, query Supabase student_profiles
+        if (!foundReport) {
+          try {
+            const { data: sp } = await supabase
+              .from("student_profiles")
+              .select("latest_assessment")
+              .eq("id", user.id)
+              .maybeSingle();
+
+            if (sp?.latest_assessment && (sp.latest_assessment as any).scorePercent !== undefined) {
+              const la = sp.latest_assessment as any;
+              const remoteReport: AssessmentReport = {
+                id: `${la.topicId || "quiz"}-${la.levelId || "test"}`,
+                topicTitle: la.topicTitle || "Diagnostic Assessment",
+                levelTitle: la.levelTitle || "Assessment",
+                date: la.submittedAt
+                  ? new Date(la.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                  : "Recent",
+                scorePercent: la.scorePercent,
+                correctCount: la.correctAnswers,
+                totalCount: la.totalQuestions,
+                evaluatedQuestions: la.evaluatedQuestions || [],
+                skillBreakdown: (la.skillPerformance || []).map((sk: any) => ({
+                  skill: sk.label || sk.key,
+                  score: sk.scorePercent || 0,
+                  benchmark: 70,
+                  trend: (sk.scorePercent || 0) >= 70 ? "up" : "down",
+                })),
+                gapRecommendations: [],
+              };
+
+              if (
+                remoteReport.id === reportId ||
+                remoteReport.id.toLowerCase().includes(reportId.toLowerCase()) ||
+                reportId.toLowerCase().includes(remoteReport.id.toLowerCase()) ||
+                reportId.toLowerCase() === "latest"
+              ) {
+                foundReport = remoteReport;
+              }
+            }
+          } catch (dbErr) {
+            console.warn("Could not load report from Supabase:", dbErr);
+          }
+        }
+
+        setReport(foundReport);
+      } catch (e) {
+        console.warn("Could not load report:", e);
+      } finally {
+        setIsLoaded(true);
+      }
     }
+
+    loadReport();
   }, [reportId]);
 
   if (isLoaded && !report) {

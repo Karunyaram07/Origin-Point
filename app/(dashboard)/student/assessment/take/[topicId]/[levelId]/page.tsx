@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 
 interface Question {
   id: number;
@@ -157,10 +158,14 @@ export default function AssessmentTakePage() {
       };
 
     try {
-      localStorage.setItem("skillsync_latest_assessment_report", JSON.stringify(report));
+      const { data: { user } } = await supabase.auth.getUser();
+      const userReportsKey = user ? `skillsync_${user.id}_all_assessment_reports` : "skillsync_all_assessment_reports";
+      const userLatestKey = user ? `skillsync_${user.id}_latest_assessment_report` : "skillsync_latest_assessment_report";
 
-      // Also persist to all completed assessment reports collection
-      const existingReportsRaw = localStorage.getItem("skillsync_all_assessment_reports");
+      localStorage.setItem(userLatestKey, JSON.stringify(report));
+
+      // Also persist to all completed assessment reports collection for this user
+      const existingReportsRaw = localStorage.getItem(userReportsKey);
       let allReports: any[] = [];
       try {
         if (existingReportsRaw) {
@@ -172,9 +177,13 @@ export default function AssessmentTakePage() {
         (r: any) => !(r.topicTitle === topicTitle && r.levelTitle === levelTitle)
       );
       localStorage.setItem(
-        "skillsync_all_assessment_reports",
+        userReportsKey,
         JSON.stringify([report, ...filtered])
       );
+
+      // Clean out legacy un-scoped keys so they cannot pollute other accounts
+      localStorage.removeItem("skillsync_latest_assessment_report");
+      localStorage.removeItem("skillsync_all_assessment_reports");
     } catch (e) {
       console.warn("localStorage save failed:", e);
     }

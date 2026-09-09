@@ -107,6 +107,14 @@ export function TopBar({ role = "student", title, className }: TopBarProps) {
   const handleLogout = async () => {
     setDropdownOpen(false);
     try {
+      if (typeof window !== "undefined") {
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith("skillsync_")) {
+            localStorage.removeItem(k);
+          }
+        });
+        sessionStorage.clear();
+      }
       await supabase.auth.signOut();
     } catch (err) {
       console.warn("SignOut error:", err);

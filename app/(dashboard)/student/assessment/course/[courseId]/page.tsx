@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { getCourseDetails, CourseModuleItem, SubTopic } from "@/lib/courses-data";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 
 // External learning resources generator per course with direct, topic-specific destinations
 function getCourseExternalResources(courseId: string, courseTitle: string) {
@@ -229,18 +230,23 @@ export default function CourseDetailPage() {
   const progressPercent = Math.round((completedCount / course.totalModules) * 100);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("skillsync_completed_modules");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          // Clean out any assessment keys to keep course completions pure
-          setCompletedModules(parsed.filter((k) => typeof k === "string" && !k.startsWith("assessment-")));
+    async function loadUserModules() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const key = `skillsync_${user.id}_completed_modules`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setCompletedModules(parsed.filter((k) => typeof k === "string" && !k.startsWith("assessment-")));
+          }
         }
+      } catch (e) {
+        console.warn("Could not read completed modules from localStorage:", e);
       }
-    } catch (e) {
-      console.warn("Could not read completed modules from localStorage:", e);
     }
+    loadUserModules();
   }, []);
 
   // Divide modules into 4 distinct levels (2 modules per level)

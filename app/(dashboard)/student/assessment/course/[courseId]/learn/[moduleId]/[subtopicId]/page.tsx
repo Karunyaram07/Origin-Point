@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { getCourseDetails, SubTopic } from "@/lib/courses-data";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 
 interface Question {
   id: number;
@@ -161,14 +162,16 @@ export default function SubTopicLearnPage() {
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: optIdx }));
   };
 
-  const handleSubmit = () => {
-    // Mark module as completed in localStorage
+  const handleSubmit = async () => {
+    // Mark module as completed in user-scoped localStorage
     const modKey = `${course.id}-${moduleId}`;
     try {
-      const raw = localStorage.getItem("skillsync_completed_modules") ?? "[]";
+      const { data: { user } } = await supabase.auth.getUser();
+      const storageKey = user ? `skillsync_${user.id}_completed_modules` : "skillsync_completed_modules";
+      const raw = localStorage.getItem(storageKey) ?? "[]";
       const arr: string[] = JSON.parse(raw);
       if (!arr.includes(modKey)) {
-        localStorage.setItem("skillsync_completed_modules", JSON.stringify([...arr, modKey]));
+        localStorage.setItem(storageKey, JSON.stringify([...arr, modKey]));
       }
     } catch (e) {}
     setPhase("submitted");

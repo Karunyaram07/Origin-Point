@@ -83,69 +83,77 @@ export default function SkillReportPage() {
       let reports: AssessmentReport[] = [];
 
       try {
-        const allSavedRaw = localStorage.getItem("skillsync_all_assessment_reports");
-        const latestSavedRaw = localStorage.getItem("skillsync_latest_assessment_report");
-
-        if (allSavedRaw) {
-          const parsed = JSON.parse(allSavedRaw);
-          if (Array.isArray(parsed)) {
-            reports = parsed;
-          }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsLoaded(true);
+          return;
         }
 
-        // If allSaved was empty or missing but latest exists, ensure it is included
-        if (reports.length === 0 && latestSavedRaw) {
-          const parsed = JSON.parse(latestSavedRaw);
-          if (parsed && parsed.scorePercent !== undefined) {
-            reports = [parsed];
-          }
-        }
-      } catch (e) {
-        console.warn("Failed to load completed assessment reports from localStorage:", e);
-      }
-
-      // Check Supabase student_profiles if no reports found in localStorage
-      if (reports.length === 0) {
+        // Clean out legacy un-scoped keys from previous shared browser sessions
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { data: sp } = await supabase
-              .from("student_profiles")
-              .select("latest_assessment")
-              .eq("id", user.id)
-              .maybeSingle();
+          localStorage.removeItem("skillsync_all_assessment_reports");
+          localStorage.removeItem("skillsync_latest_assessment_report");
+        } catch {}
 
-            if (sp?.latest_assessment && (sp.latest_assessment as any).scorePercent !== undefined) {
-              const la = sp.latest_assessment as any;
-              const remoteReport: AssessmentReport = {
-                id: `${la.topicId || "quiz"}-${la.levelId || "test"}`,
-                topicTitle: la.topicTitle || "Diagnostic Assessment",
-                levelTitle: la.levelTitle || "Assessment",
-                date: la.submittedAt
-                  ? new Date(la.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                  : "Recent",
-                scorePercent: la.scorePercent,
-                correctCount: la.correctAnswers,
-                totalCount: la.totalQuestions,
-                evaluatedQuestions: la.evaluatedQuestions || [],
-                skillBreakdown: (la.skillPerformance || []).map((sp: any) => ({
-                  skill: sp.label || sp.key,
-                  score: sp.scorePercent || 0,
-                  benchmark: 70,
-                  trend: (sp.scorePercent || 0) >= 70 ? "up" : "down",
-                })),
-                gapRecommendations: [],
-              };
-              reports = [remoteReport];
-              try {
-                localStorage.setItem("skillsync_all_assessment_reports", JSON.stringify(reports));
-                localStorage.setItem("skillsync_latest_assessment_report", JSON.stringify(remoteReport));
-              } catch {}
+        const userReportsKey = `skillsync_${user.id}_all_assessment_reports`;
+        const userLatestKey = `skillsync_${user.id}_latest_assessment_report`;
+
+        // 1. Check user-scoped local storage
+        try {
+          const userSavedRaw = localStorage.getItem(userReportsKey);
+          if (userSavedRaw) {
+            const parsed = JSON.parse(userSavedRaw);
+            if (Array.isArray(parsed)) reports = parsed;
+          }
+        } catch {}
+
+        // 2. Query Supabase student_profiles as the authenticated source of truth
+        try {
+          const { data: sp } = await supabase
+            .from("student_profiles")
+            .select("latest_assessment")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (sp?.latest_assessment && (sp.latest_assessment as any).scorePercent !== undefined) {
+            const la = sp.latest_assessment as any;
+            const remoteReport: AssessmentReport = {
+              id: `${la.topicId || "quiz"}-${la.levelId || "test"}`,
+              topicTitle: la.topicTitle || "Diagnostic Assessment",
+              levelTitle: la.levelTitle || "Assessment",
+              date: la.submittedAt
+                ? new Date(la.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                : "Recent",
+              scorePercent: la.scorePercent,
+              correctCount: la.correctAnswers,
+              totalCount: la.totalQuestions,
+              evaluatedQuestions: la.evaluatedQuestions || [],
+              skillBreakdown: (la.skillPerformance || []).map((sk: any) => ({
+                skill: sk.label || sk.key,
+                score: sk.scorePercent || 0,
+                benchmark: 70,
+                trend: (sk.scorePercent || 0) >= 70 ? "up" : "down",
+              })),
+              gapRecommendations: [],
+            };
+
+            const exists = reports.some(
+              (r) => r.id === remoteReport.id || r.topicTitle === remoteReport.topicTitle
+            );
+            if (!exists) {
+              reports = [remoteReport, ...reports];
             }
+
+            try {
+              localStorage.setItem(userReportsKey, JSON.stringify(reports));
+              localStorage.setItem(userLatestKey, JSON.stringify(remoteReport));
+            } catch {}
           }
         } catch (dbErr) {
           console.warn("Could not fetch remote reports from student_profiles:", dbErr);
         }
+      } catch (e) {
+        console.warn("Failed to load completed assessment reports:", e);
       }
 
       setCompletedReports(reports);

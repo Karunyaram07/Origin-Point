@@ -177,89 +177,79 @@ export default function SkillAssessmentPage() {
   const [assessmentScores, setAssessmentScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    try {
-      // 1. Direct fully completed courses
-      const savedCoursesRaw = localStorage.getItem("skillsync_completed_courses");
-      let finished: string[] = [];
-      if (savedCoursesRaw) {
-        const parsed = JSON.parse(savedCoursesRaw);
-        if (Array.isArray(parsed)) finished = parsed;
-      }
+    async function loadUserData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      // 2. Clean any rogue assessment keys from completed_modules
-      const savedModulesRaw = localStorage.getItem("skillsync_completed_modules");
-      if (savedModulesRaw) {
-        const parsedMods: string[] = JSON.parse(savedModulesRaw);
-        if (Array.isArray(parsedMods)) {
-          const cleaned = parsedMods.filter((k) => typeof k === "string" && !k.startsWith("assessment-"));
-          if (cleaned.length !== parsedMods.length) {
-            localStorage.setItem("skillsync_completed_modules", JSON.stringify(cleaned));
+        // Clean out legacy un-scoped keys from previous sessions
+        try {
+          localStorage.removeItem("skillsync_latest_assessment_report");
+          localStorage.removeItem("skillsync_all_assessment_reports");
+          localStorage.removeItem("skillsync_completed_courses");
+          localStorage.removeItem("skillsync_completed_modules");
+        } catch {}
+
+        const userCourseKey = `skillsync_${user.id}_completed_courses`;
+        const userModuleKey = `skillsync_${user.id}_completed_modules`;
+
+        let finished: string[] = [];
+        try {
+          const savedCoursesRaw = localStorage.getItem(userCourseKey);
+          if (savedCoursesRaw) {
+            const parsed = JSON.parse(savedCoursesRaw);
+            if (Array.isArray(parsed)) finished = parsed;
           }
-          // A course with 8 modules is complete when all 8 are finished
-          courseModules.forEach((c) => {
-            const modsFinished = cleaned.filter((m) => m.startsWith(`${c.id}-`)).length;
-            if (modsFinished >= 8 && !finished.includes(c.id)) {
-              finished.push(c.id);
+
+          const savedModulesRaw = localStorage.getItem(userModuleKey);
+          if (savedModulesRaw) {
+            const parsedMods: string[] = JSON.parse(savedModulesRaw);
+            if (Array.isArray(parsedMods)) {
+              const cleaned = parsedMods.filter((k) => typeof k === "string" && !k.startsWith("assessment-"));
+              courseModules.forEach((c) => {
+                const modsFinished = cleaned.filter((m) => m.startsWith(`${c.id}-`)).length;
+                if (modsFinished >= 8 && !finished.includes(c.id)) {
+                  finished.push(c.id);
+                }
+              });
+            }
+          }
+        } catch {}
+
+        setCompletedCourses(finished);
+
+        // Fetch live scores from Supabase student_profiles strictly for this authenticated user
+        const { data: sp } = await supabase
+          .from("student_profiles")
+          .select("assessment_scores, latest_assessment")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const scores: Record<string, number> = {};
+        if (sp?.assessment_scores && typeof sp.assessment_scores === "object") {
+          Object.entries(sp.assessment_scores).forEach(([key, val]) => {
+            if (typeof val === "number") {
+              scores[key] = val;
+            } else if (val && typeof val === "object" && typeof (val as any).scorePercent === "number") {
+              scores[key] = (val as any).scorePercent;
+            } else if (val && typeof val === "object" && typeof (val as any).percentage === "number") {
+              scores[key] = (val as any).percentage;
             }
           });
         }
-      }
 
-      setCompletedCourses(finished);
-
-      // 3. Local assessment report
-      const localReportRaw = localStorage.getItem("skillsync_latest_assessment_report");
-      if (localReportRaw) {
-        try {
-          const rep = JSON.parse(localReportRaw);
-          if (rep?.topicId && rep?.percentage !== undefined) {
-            setAssessmentScores((prev) => ({ ...prev, [rep.topicId]: rep.percentage }));
-          }
-        } catch {}
-      }
-    } catch (e) {
-      console.warn("Could not read completed courses from localStorage:", e);
-    }
-
-    // 4. Fetch live scores from Supabase student_profiles
-    async function loadAssessmentScores() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: sp } = await supabase
-            .from("student_profiles")
-            .select("assessment_scores, latest_assessment")
-            .eq("id", user.id)
-            .maybeSingle();
-
-          const scores: Record<string, number> = {};
-          if (sp?.assessment_scores && typeof sp.assessment_scores === "object") {
-            Object.entries(sp.assessment_scores).forEach(([key, val]) => {
-              if (typeof val === "number") {
-                scores[key] = val;
-              } else if (val && typeof val === "object" && typeof (val as any).scorePercent === "number") {
-                scores[key] = (val as any).scorePercent;
-              } else if (val && typeof val === "object" && typeof (val as any).percentage === "number") {
-                scores[key] = (val as any).percentage;
-              }
-            });
-          }
-
-          const latestTopic = sp?.latest_assessment?.topicId;
-          const latestPct = sp?.latest_assessment?.scorePercent ?? sp?.latest_assessment?.percentage;
-          if (latestTopic && typeof latestPct === "number" && scores[latestTopic] === undefined) {
-            scores[latestTopic] = latestPct;
-          }
-
-          if (Object.keys(scores).length > 0) {
-            setAssessmentScores((prev) => ({ ...prev, ...scores }));
-          }
+        const latestTopic = sp?.latest_assessment?.topicId;
+        const latestPct = sp?.latest_assessment?.scorePercent ?? sp?.latest_assessment?.percentage;
+        if (latestTopic && typeof latestPct === "number" && scores[latestTopic] === undefined) {
+          scores[latestTopic] = latestPct;
         }
+
+        setAssessmentScores(scores);
       } catch (err) {
-        console.warn("Could not load assessment scores from Supabase:", err);
+        console.warn("Could not load user data from Supabase:", err);
       }
     }
-    loadAssessmentScores();
+    loadUserData();
   }, []);
 
   // Dynamic course progress: starts at 0/8 and increments strictly when a course is fully completed
