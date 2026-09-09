@@ -49,8 +49,10 @@ export async function GET(request) {
       .eq("id", user.id)
       .maybeSingle();
 
-    const mode = searchParams.get("mode") || "login";
-    const queryRole = searchParams.get("role");
+    const cookieRole = request.cookies.get("skillsync_role")?.value;
+    const cookieMode = request.cookies.get("skillsync_auth_mode")?.value;
+    const mode = searchParams.get("mode") || cookieMode || "login";
+    const queryRole = searchParams.get("role") || cookieRole;
 
     const resolvedRole =
       existingProfile?.role ||

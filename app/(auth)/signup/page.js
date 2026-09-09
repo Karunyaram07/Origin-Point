@@ -235,13 +235,14 @@ function SignUpForm() {
     const roleToAssign = selectedRole || "student";
     try {
       localStorage.setItem("selected_role", roleToAssign);
-      document.cookie = `skillsync_role=${roleToAssign}; path=/; max-age=31536000`;
+      document.cookie = `skillsync_role=${roleToAssign}; path=/; max-age=31536000; SameSite=Lax`;
+      document.cookie = "skillsync_auth_mode=signup; path=/; max-age=3600; SameSite=Lax";
     } catch {}
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?mode=signup&role=${roleToAssign}`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) {

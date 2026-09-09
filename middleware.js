@@ -32,6 +32,15 @@ export async function middleware(request) {
     (role) => pathname === `/${role}` || pathname.startsWith(`/${role}/`)
   );
 
+  const code = request.nextUrl.searchParams.get("code");
+  if (code && pathname !== "/auth/callback") {
+    const callbackUrl = new URL("/auth/callback", request.url);
+    request.nextUrl.searchParams.forEach((val, key) => {
+      callbackUrl.searchParams.set(key, val);
+    });
+    return copyCookies(response, NextResponse.redirect(callbackUrl));
+  }
+
   let supabase = null;
   let user = null;
 

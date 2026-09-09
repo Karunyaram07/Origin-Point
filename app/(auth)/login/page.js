@@ -126,10 +126,13 @@ function LoginForm() {
     setIsGoogleLoading(true);
     setAuthError("");
     try {
+      try {
+        document.cookie = "skillsync_auth_mode=login; path=/; max-age=3600; SameSite=Lax";
+      } catch {}
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?mode=login`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) {
