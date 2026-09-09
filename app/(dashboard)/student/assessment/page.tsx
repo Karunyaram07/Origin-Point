@@ -234,13 +234,23 @@ export default function SkillAssessmentPage() {
 
           const scores: Record<string, number> = {};
           if (sp?.assessment_scores && typeof sp.assessment_scores === "object") {
-            Object.assign(scores, sp.assessment_scores);
+            Object.entries(sp.assessment_scores).forEach(([key, val]) => {
+              if (typeof val === "number") {
+                scores[key] = val;
+              } else if (val && typeof val === "object" && typeof (val as any).scorePercent === "number") {
+                scores[key] = (val as any).scorePercent;
+              } else if (val && typeof val === "object" && typeof (val as any).percentage === "number") {
+                scores[key] = (val as any).percentage;
+              }
+            });
           }
-          if (sp?.latest_assessment?.topicId && sp.latest_assessment.percentage !== undefined) {
-            if (scores[sp.latest_assessment.topicId] === undefined) {
-              scores[sp.latest_assessment.topicId] = sp.latest_assessment.percentage;
-            }
+
+          const latestTopic = sp?.latest_assessment?.topicId;
+          const latestPct = sp?.latest_assessment?.scorePercent ?? sp?.latest_assessment?.percentage;
+          if (latestTopic && typeof latestPct === "number" && scores[latestTopic] === undefined) {
+            scores[latestTopic] = latestPct;
           }
+
           if (Object.keys(scores).length > 0) {
             setAssessmentScores((prev) => ({ ...prev, ...scores }));
           }
@@ -443,8 +453,14 @@ export default function SkillAssessmentPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     {assessmentTopics.map((topic) => {
-                      const score = assessmentScores[topic.id];
-                      const isCompleted = score !== undefined;
+                      const rawScore = assessmentScores[topic.id];
+                      const numericScore =
+                        typeof rawScore === "number"
+                          ? rawScore
+                          : rawScore && typeof rawScore === "object" && typeof (rawScore as any).scorePercent === "number"
+                          ? (rawScore as any).scorePercent
+                          : undefined;
+                      const isCompleted = numericScore !== undefined;
                       return (
                         <div
                           key={topic.id}
@@ -454,7 +470,7 @@ export default function SkillAssessmentPage() {
                           {isCompleted && (
                             <span className="absolute top-3.5 right-3.5 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[0.65rem] font-bold text-emerald-600 border border-emerald-500/20">
                               <CheckCircle2 className="h-3 w-3" />
-                              {score}%
+                              {numericScore}%
                             </span>
                           )}
                           <h3 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors leading-snug">

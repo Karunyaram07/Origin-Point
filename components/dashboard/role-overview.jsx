@@ -283,7 +283,7 @@ export function RoleOverview({ role = "student" }) {
             const resolvedScore =
               sp?.overall_skill_score && sp.overall_skill_score > 0
                 ? sp.overall_skill_score
-                : sp?.latest_assessment?.percentage || 0;
+                : sp?.latest_assessment?.scorePercent || sp?.latest_assessment?.percentage || 0;
 
             const latestAssess = sp?.latest_assessment;
             const isAttempted = Boolean(

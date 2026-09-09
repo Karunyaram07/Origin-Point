@@ -87,11 +87,18 @@ export default function PortfolioPage() {
           });
 
           // Dynamic badges from assessment_scores
-          const scores = sp?.assessment_scores && typeof sp.assessment_scores === "object" ? sp.assessment_scores : {};
-          if (sp?.latest_assessment?.topicId && sp.latest_assessment.percentage !== undefined) {
-            if (scores[sp.latest_assessment.topicId] === undefined) {
-              scores[sp.latest_assessment.topicId] = sp.latest_assessment.percentage;
-            }
+          const rawScores = sp?.assessment_scores && typeof sp.assessment_scores === "object" ? sp.assessment_scores : {};
+          const scores: Record<string, number> = {};
+          Object.entries(rawScores).forEach(([k, v]) => {
+            if (typeof v === "number") scores[k] = v;
+            else if (v && typeof v === "object" && typeof (v as any).scorePercent === "number") scores[k] = (v as any).scorePercent;
+            else if (v && typeof v === "object" && typeof (v as any).percentage === "number") scores[k] = (v as any).percentage;
+          });
+
+          const latestTopic = sp?.latest_assessment?.topicId;
+          const latestPct = sp?.latest_assessment?.scorePercent ?? sp?.latest_assessment?.percentage;
+          if (latestTopic && typeof latestPct === "number" && scores[latestTopic] === undefined) {
+            scores[latestTopic] = latestPct;
           }
 
           const dynamicBadges = [
