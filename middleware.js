@@ -27,30 +27,43 @@ function copyCookies(source, target) {
 
 export async function middleware(request) {
   const response = NextResponse.next({ request });
-  const supabase = createMiddlewareClient(request, response);
-  const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
   const isDashboardRoute = VALID_ROLES.some(
     (role) => pathname === `/${role}` || pathname.startsWith(`/${role}/`)
   );
 
+  let supabase = null;
+  let user = null;
+
+  try {
+    supabase = createMiddlewareClient(request, response);
+    const { data } = await supabase.auth.getUser();
+    user = data?.user || null;
+  } catch (authErr) {
+    console.warn("Middleware Supabase auth error:", authErr);
+  }
+
   if (isPublicPath(pathname)) {
-    if (pathname === "/onboarding" && user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, onboarding_completed")
-        .eq("id", user.id)
-        .maybeSingle();
+    if (pathname === "/onboarding" && user && supabase) {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, onboarding_completed")
+          .eq("id", user.id)
+          .maybeSingle();
 
-      if (profile?.role !== "student") {
-        const destination = profile?.role && VALID_ROLES.includes(profile.role)
-          ? `/${profile.role}`
-          : "/select-role";
-        return copyCookies(response, NextResponse.redirect(new URL(destination, request.url)));
-      }
+        if (profile?.role !== "student") {
+          const destination = profile?.role && VALID_ROLES.includes(profile.role)
+            ? `/${profile.role}`
+            : "/select-role";
+          return copyCookies(response, NextResponse.redirect(new URL(destination, request.url)));
+        }
 
-      if (profile.onboarding_completed === true) {
-        return copyCookies(response, NextResponse.redirect(new URL("/student", request.url)));
+        if (profile.onboarding_completed === true) {
+          return copyCookies(response, NextResponse.redirect(new URL("/student", request.url)));
+        }
+      } catch (e) {
+        console.warn("Middleware onboarding check error:", e);
       }
     }
 
@@ -65,11 +78,19 @@ export async function middleware(request) {
     return copyCookies(response, NextResponse.redirect(new URL("/login", request.url)));
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, onboarding_completed")
-    .eq("id", user.id)
-    .maybeSingle();
+  let profile = null;
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("role, onboarding_completed")
+        .eq("id", user.id)
+        .maybeSingle();
+      profile = data;
+    } catch (e) {
+      console.warn("Middleware profile fetch error:", e);
+    }
+  }
 
   if (!profile?.role || !VALID_ROLES.includes(profile.role)) {
     return copyCookies(response, NextResponse.redirect(new URL("/select-role", request.url)));
